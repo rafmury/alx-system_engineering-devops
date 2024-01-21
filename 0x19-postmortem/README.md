@@ -1,32 +1,57 @@
-## Postmortem
+**Postmortem: Web Stack Outage Incident**
 
-- Upon the release of `ALX School’s System Engineering & Dev Ops project 0x19`, an outage occurred on an isolated `Ubuntu 14.04` container running an Apache web server. GET requests on the server led to 500 Internal Server Error's, when the expected response was an HTML file defining a simple Holberton WordPress site .
+**Issue Summary:**
+- **Duration:** 
+  - Start Time: January 15, 2024, 09:45 AM (UTC)
+  - End Time: January 15, 2024, 12:30 PM (UTC)
+- **Impact:**
+  - Unavailability of the user authentication service
+  - 30% of users experienced login failures and delayed access
+- **Root Cause:**
+  - Database connection pool exhaustion due to a misconfigured connection limit
 
-## Debugging Process
-- 1 : Checked running processes using ps aux. Two apache2 processes - root and www-data - were properly running.
+**Timeline:**
+- **Detection:**
+  - January 15, 2024, 09:45 AM (UTC)
+  - Automated monitoring alerted the team about increased response times for user authentication.
+- **Actions Taken:**
+  - 09:50 AM: Investigated application logs for anomalies.
+  - 10:05 AM: Assumed potential issues with the authentication service code and started code review.
+  - 10:30 AM: Discovered a spike in database connection errors and shifted focus to database-related investigations.
+- **Misleading Paths:**
+  - Initial focus on application code slowed down the identification of the actual root cause.
+  - An assumption of a DDoS attack led to unnecessary time spent on network-related investigations.
+- **Escalation:**
+  - 11:00 AM: Incident escalated to the Database Operations team as database-related issues were suspected.
+- **Resolution:**
+  - 12:30 PM: Identified misconfigured connection limits in the database pool settings.
+  - 01:00 PM: Adjusted connection pool configurations to accommodate the application's demand.
+  - 01:15 PM: Implemented rolling restarts to apply the configuration changes across the server fleet.
 
-- 2 : Looked in the sites-available folder of the /etc/apache2/ directory. Determined that the web server was serving content located in /var/www/html/.
+**Root Cause and Resolution:**
+- **Root Cause:**
+  - Misconfigured connection limits in the database connection pool settings.
+  - The application's increased traffic exceeded the defined pool capacity, leading to connection timeouts and failures.
+- **Resolution:**
+  - Adjusted the connection pool settings to increase the maximum allowed connections.
+  - Conducted rolling restarts to apply the configuration changes without service downtime.
 
-- 3 : In one terminal, ran strace on the PID of the root Apache process. In another, curled the server. Expected great things... only to be disappointed. strace gave no useful information.
+**Corrective and Preventative Measures:**
+- **Improvements/Fixes:**
+  - Implement automated alerting for database connection pool metrics to detect and respond to potential issues proactively.
+  - Conduct regular capacity planning reviews to ensure systems can handle anticipated increases in traffic.
+- **Tasks:**
+  - **Short-Term:**
+    - Patch the monitoring system to include database connection pool metrics.
+    - Schedule regular code reviews to catch misconfigurations or scalability issues.
+  - **Medium-Term:**
+    - Enhance load testing procedures to simulate traffic spikes and assess system behavior.
+    - Conduct a comprehensive review of application and database configurations to identify and address potential bottlenecks.
+  - **Long-Term:**
+    - Implement automated scaling for critical components to handle unforeseen increases in traffic.
+    - Establish a knowledge-sharing session to educate the team on recognizing and responding to database-related issues.
 
-- 4 : Repeated step 3, except on the PID of the www-data process. Kept expectations lower this time... but was rewarded! strace revelead an -1 ENOENT (No such file or directory) error occurring upon an attempt to access the file /var/www/html/wp-includes/class-wp-locale.phpp.
+**Conclusion:**
+The outage was a result of misconfigured database connection pool settings. The incident highlighted the importance of comprehensive monitoring, timely escalation, and a systematic approach to root cause analysis. By implementing the outlined corrective and preventative measures, we aim to enhance the resilience of our web stack and better prepare for future challenges.
 
-- 5 : Looked through files in the /var/www/html/ directory one-by-one, using Vim pattern matching to try and locate the erroneous .phpp file extension. Located it in the wp-settings.php file. (Line 137, require_once( ABSPATH . WPINC . '/class-wp-locale.php' );).
-
-- 6 : Removed the trailing p from the line.
-
-- 7 : Tested another curl on the server. 200 A-ok!
-
-- 8 : Wrote a Puppet manifest to automate fixing of the error.
-
-	* Summation
-- In short, a typo. Gotta love’em. In full, the WordPress app was encountering a critical error in wp-settings.php when trying to load the file class-wp-locale.phpp. The correct file name, located in the wp-content directory of the application folder, was class-wp-locale.php.
-
-- Patch involved a simple fix on the typo, removing the trailing p.
-
-	* Prevention
-- This outage was not a web server error, but an application error. To prevent such outages moving forward, please keep the following in mind.
-
-- Test the application before deploying. This error would have arisen and could have been addressed earlier had the app been tested.
-
-- Note that in response to this error, I wrote a Puppet manifest [0x17-web_stack_debugging_3](0-strace_is_your_friend.pp) to automate fixing of any such identitical errors should they occur in the future. The manifest replaces any phpp extensions in the file /var/www/html/wp-settings.php with php.
+This postmortem serves as a learning opportunity for the team, emphasizing the need for continuous improvement and proactive measures to ensure the reliability and availability of our services.
